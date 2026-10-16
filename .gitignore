@@ -1,0 +1,21 @@
+# Local environments and large runtime assets
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+runtime/
+models/
+bin/
+outputs/
+work/
+
+# Local state and generated files
+*.log
+*.tmp
+*.cache
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.vscode/
+.idea/

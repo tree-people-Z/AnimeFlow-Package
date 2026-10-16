@@ -1,0 +1,4 @@
+gradio>=6.30,<7
+pillow>=10.0
+numpy>=1.26
+ncnn>=1.0.0

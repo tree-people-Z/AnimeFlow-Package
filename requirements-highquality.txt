@@ -1,0 +1,5 @@
+# Optional high-quality neural backends. Installation is best effort.
+diffusers>=0.41.0
+accelerate>=1.0.0
+peft>=0.14.0
+transformers>=4.45.0
