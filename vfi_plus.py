@@ -45,6 +45,7 @@ Implementation notes
 from __future__ import annotations
 
 import sys
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -91,6 +92,18 @@ def _engine(scale: float = 1.0):
 
     return GMFSS_UNION(weights=str(WEIGHTS), scale=float(scale),
                        device=torch.device("cuda"))
+
+
+def release():
+    """Release all cached interpolation engines and their CUDA allocations."""
+    import gc
+    import torch
+
+    _engine.cache_clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
 
 
 def interpolate_stream(frame_source, times: int, emit,
@@ -144,6 +157,21 @@ def interpolate_stream(frame_source, times: int, emit,
     previous, current = prep(first), prep(second)
     step = 0
     total = total_hint or 0
+    started = time.perf_counter()
+
+    def report_progress(input_done: int, output_done: int, fraction: float):
+        if progress is None:
+            return
+        elapsed = max(time.perf_counter() - started, 1e-6)
+        rate = max(input_done - 1, 0) / elapsed
+        remaining = max(total - input_done, 0)
+        eta = remaining / rate if rate > 1e-6 else 0.0
+        progress(
+            0.05 + 0.9 * min(fraction, 1.0),
+            desc=(f"补帧 · 源帧 {input_done}/{total or '?'} · "
+                  f"输出帧 {output_done}/{(total * times) if total else '?'} · "
+                  f"{rate:.2f} 源帧/秒 · 预计剩余 {eta / 60:.1f} 分钟")
+        )
 
     def gap_middles():
         """Generated frames for the (previous, current) gap.
@@ -166,10 +194,11 @@ def interpolate_stream(frame_source, times: int, emit,
         previous = current
         current = prep(upcoming_raw)
         step += 1
-        if progress:
-            fraction = (step / total) if total else 0.5
-            progress(0.05 + 0.9 * min(fraction, 1.0),
-                     desc=f"补帧 {step}/{total or '?'}")
+        # At this point step+2 source frames have been consumed.  `produced`
+        # includes both preserved and generated frames for the same interval.
+        if step == 1 or step % 5 == 0 or step >= max(total - 2, 1):
+            input_done = min(step + 2, total) if total else step + 2
+            report_progress(input_done, produced, input_done / total if total else 0.5)
 
     for tensor in gap_middles():
         push(tensor)
@@ -180,8 +209,7 @@ def interpolate_stream(frame_source, times: int, emit,
         emit(current_raw)
     produced += len(ts) + times
 
-    if progress:
-        progress(0.98, desc="补帧完成")
+    report_progress(total or step + 2, produced, 1.0)
     return produced
 
 

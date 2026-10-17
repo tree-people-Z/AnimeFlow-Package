@@ -32,6 +32,11 @@ _WRAPPER_PREFIXES = ("_orig_mod.", "module.", "model.")
 
 
 def _strip_wrappers(state: dict) -> dict:
+    if not any(
+        isinstance(key, str) and key.startswith(_WRAPPER_PREFIXES)
+        for key in state
+    ):
+        return state
     cleaned = {}
     for key, value in state.items():
         changed = True
@@ -50,7 +55,11 @@ def _load_model(weights: Path, device: str):
 
     from vendor.transnetv2_pytorch import TransNetV2
 
-    state = torch.load(weights, map_location="cpu", weights_only=True)
+    try:
+        state = torch.load(weights, map_location="cpu", weights_only=True, mmap=True)
+    except (TypeError, RuntimeError):
+        # Older bundled torch builds may not support mmap checkpoints.
+        state = torch.load(weights, map_location="cpu", weights_only=True)
     if isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
     model = TransNetV2()
@@ -137,11 +146,11 @@ def detect(ffmpeg: str, video: str, threshold: float = 0.5, progress=None):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if progress is not None:
-        progress(0.05, desc="解码视频（27×48 低分辨率）")
+        progress(0.05, desc="镜头检测 · 解码视频帧（27×48）")
     frames = _decode_small_frames(ffmpeg, video)
 
     if progress is not None:
-        progress(0.15, desc="加载 TransNetV2")
+        progress(0.15, desc=f"镜头检测 · 已解码 {len(frames)} 帧 · 加载 TransNetV2")
     model = _load_model(TRANSNET_WEIGHTS, device)
 
     single, many = _predict(model, frames, device, progress)

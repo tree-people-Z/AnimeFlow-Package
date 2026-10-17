@@ -95,6 +95,35 @@ Write-Host "CUDA available: $($runtime.cuda)"
 if (-not $runtime.cuda) {
     Write-Host "WARNING: CUDA is not available. GMFSS interpolation and ToonOut cutout require CUDA."
 }
+
+# Check the public GitHub Release without changing local files.  This is
+# intentionally best-effort: an offline machine must still start normally.
+if ($env:ANIMEFLOW_SKIP_UPDATE_CHECK -ne "1") {
+    $versionPath = Join-Path $root "VERSION"
+    $localVersion = "1.0.0"
+    if (Test-Path -LiteralPath $versionPath) {
+        $localVersion = (Get-Content -LiteralPath $versionPath -Raw).Trim()
+    }
+    try {
+        $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/tree-people-Z/AnimeFlow-Package/releases/latest" `
+            -Headers @{ "User-Agent" = "AnimeFlow-Updater" } `
+            -TimeoutSec 3
+        $tag = [string]$release.tag_name
+        if ($tag -match '^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$') {
+            $latestVersion = "$($matches[1]).$($matches[2]).$($matches[3])"
+            if ([version]$latestVersion -gt [version]$localVersion) {
+                Write-Host "发现新版本 AnimeFlow $latestVersion（当前 $localVersion）：$($release.html_url)"
+            } else {
+                Write-Host "AnimeFlow $localVersion 已是最新版本。"
+            }
+        } else {
+            Write-Host "更新检查跳过：GitHub Release 标签格式无法识别。"
+        }
+    } catch {
+        Write-Host "更新检查跳过：GitHub 暂时不可用，继续启动。"
+    }
+}
 Write-Host "Starting AnimeFlow at $url"
 $logDir = Join-Path $root "work"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null

@@ -122,6 +122,9 @@ def build_ui(b):
                                     cutout_format = gr.Dropdown(b.CUTOUT_OUTPUTS, value=b.CUTOUT_OUTPUTS[0],
                                                                 label="输出格式",
                                                                 info="PNG 序列最适合继续合成；MOV/WebM 可直接保留 Alpha。")
+                                    cutout_batch = gr.Slider(1, b.CUTOUT_BATCH_MAX, value=b.CUTOUT_BATCH_SIZE,
+                                                             step=1, label="GPU batch size",
+                                                             info="一次送入 GPU 的帧数；8GB 显存建议从 1/2 开始，过大可能 OOM。")
                                     gr.Markdown("视频抠图会逐帧推理，速度取决于片长和显卡；模型不完整或 CUDA 不可用时会直接提示。",
                                                 elem_classes="tip-note")
                                     cutout_btn = run_button("导出透明帧")
@@ -133,6 +136,9 @@ def build_ui(b):
                                 with gr.Column(scale=2, min_width=280, elem_classes="tool-controls"):
                                     gr.Markdown("模型 · Depth Anything V2 Large　·　灰阶按全片统一范围映射",
                                                 elem_classes="model-note")
+                                    depth_batch = gr.Slider(1, b.DEPTH_BATCH_MAX, value=b.DEPTH_BATCH_SIZE,
+                                                            step=1, label="GPU batch size",
+                                                            info="一次送入 GPU 的帧数；从 1 开始逐步增加，显存不足会回退报错。")
                                     gr.Markdown("输出为灰度深度视频：白色表示更近，黑色表示更远。整段视频使用统一范围，镜头之间不会跳灰阶。",
                                                 elem_classes="tip-note")
                                     depth_btn = run_button("生成深度图")
@@ -163,8 +169,8 @@ def build_ui(b):
                 interp_btn.click(interpolate_selected, [video, dedup_video, source_choice, factor], [interpolated, interp_status])
                 up_btn.click(b.video_enhance, [video, up_model, up_denoise, up_tta], [up_video, up_status])
                 scene_btn.click(b.detect_scenes, [video, threshold], [scene_file, scene_status])
-                cutout_btn.click(b.video_cutout, [video, cutout_format], [cutout_file, cutout_status])
-                depth_btn.click(b.depth_video, video, [depth_result, depth_status])
+                cutout_btn.click(b.video_cutout, [video, cutout_format, cutout_batch], [cutout_file, cutout_status])
+                depth_btn.click(b.depth_video, [video, depth_batch], [depth_result, depth_status])
                 extract_btn.click(b.extract_frames, [video, every, fmt], [frames_file, gallery, extract_status])
                 video.change(lambda: None, outputs=dedup_video, queue=False)
 
